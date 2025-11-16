@@ -14,5 +14,5 @@ COPY backend/ ./
 # Exponer puerto
 EXPOSE 3000
 
-# Inicializar base de datos y luego iniciar servidor
-CMD npm run init-db && npm start
+# Iniciar servidor (la BD se inicializa automáticamente)
+CMD ["npm", "start"]

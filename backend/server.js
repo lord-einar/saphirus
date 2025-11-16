@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initCronJobs } from './utils/cron.js';
+import { initDatabase } from './database/init-auto.js';
 
 // Importar rutas
 import authRoutes from './routes/auth.js';
@@ -17,6 +18,9 @@ import supplierOrdersRoutes from './routes/supplier-orders.js';
 import salesPointsRoutes from './routes/sales-points.js';
 
 dotenv.config();
+
+// Inicializar base de datos automáticamente
+initDatabase();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

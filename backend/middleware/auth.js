@@ -66,7 +66,22 @@ export const ensureUser = async (req, res, next) => {
       }
     }
 
-    console.log(`🔐 Email detectado: ${email}`);
+    // Si aún no tenemos email, buscar en la BD (usuario ya creado previamente)
+    if (!email) {
+      console.log('⚠️  Email no encontrado en token ni userinfo, consultando BD...');
+      try {
+        const existingUser = db.prepare('SELECT email, name FROM users WHERE auth0_id = ?').get(auth0Id);
+        if (existingUser) {
+          email = existingUser.email;
+          name = name || existingUser.name;
+          console.log(`✓ Email recuperado de BD: ${email}`);
+        }
+      } catch (dbError) {
+        console.error('✗ Error consultando BD:', dbError.message);
+      }
+    }
+
+    console.log(`🔐 Email final detectado: ${email}`);
 
     // ====================================
     // VERIFICAR LISTA BLANCA DE EMAILS

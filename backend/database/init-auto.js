@@ -18,21 +18,22 @@ export function initDatabase() {
   try {
     const db = new Database(dbPath);
 
-    // Verificar si las tablas existen
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    // Verificar tablas existentes
+    const tablesBefore = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    console.log(`📊 Tablas existentes: ${tablesBefore.length}`);
 
-    if (tables.length === 0) {
-      console.log('⚠️  Base de datos vacía. Inicializando...');
+    // SIEMPRE ejecutar el schema (es seguro con CREATE TABLE IF NOT EXISTS)
+    console.log('🔄 Ejecutando schema.sql...');
+    const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
+    db.exec(schema);
 
-      // Leer y ejecutar el esquema SQL
-      const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
-      db.exec(schema);
+    // Verificar tablas después
+    const tablesAfter = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    console.log(`✅ Base de datos sincronizada: ${tablesAfter.length} tablas`);
 
-      console.log('✅ Base de datos inicializada correctamente');
-      console.log(`✅ Tablas creadas: ${db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().length}`);
-    } else {
-      console.log(`✅ Base de datos OK (${tables.length} tablas encontradas)`);
-    }
+    // Listar las tablas
+    const tableNames = tablesAfter.map(t => t.name).join(', ');
+    console.log(`📋 Tablas: ${tableNames}`);
 
     db.close();
   } catch (error) {

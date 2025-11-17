@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import db from '../database/db.js';
+import db from '../database/db-auto.js';
 
 const BASE_URL = 'https://saphirus.com.ar/tienda';
 const DELAY_MS = 1500; // 1.5 segundos entre requests

@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, param } from 'express-validator';
 import { checkJwt, ensureUser } from '../middleware/auth.js';
-import db from '../database/db.js';
+import db from '../database/db-auto.js';
 
 const router = express.Router();
 

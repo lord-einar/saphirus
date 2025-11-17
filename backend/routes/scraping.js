@@ -1,7 +1,7 @@
 import express from 'express';
 import { checkJwt, ensureUser } from '../middleware/auth.js';
 import { runScraping } from '../services/scraper.js';
-import db from '../database/db.js';
+import db from '../database/db-auto.js';
 
 const router = express.Router();
 

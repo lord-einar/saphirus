@@ -19,9 +19,6 @@ import salesPointsRoutes from './routes/sales-points.js';
 
 dotenv.config();
 
-// Inicializar base de datos automáticamente
-initDatabase();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -96,14 +93,28 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log('\n========================================');
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-  console.log('========================================\n');
+// Función principal async para inicializar BD y servidor
+async function startServer() {
+  try {
+    // Inicializar base de datos antes de iniciar el servidor
+    await initDatabase();
 
-  // Inicializar cron jobs para scraping automático
-  initCronJobs();
-});
+    // Iniciar servidor
+    app.listen(PORT, () => {
+      console.log('\n========================================');
+      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+      console.log('========================================\n');
+
+      // Inicializar cron jobs para scraping automático
+      initCronJobs();
+    });
+  } catch (error) {
+    console.error('❌ Error al iniciar el servidor:', error);
+    process.exit(1);
+  }
+}
+
+// Iniciar el servidor
+startServer();
 
 export default app;

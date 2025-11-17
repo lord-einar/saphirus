@@ -1,6 +1,6 @@
 import { expressjwt } from 'express-jwt';
 import jwksRsa from 'jwks-rsa';
-import db from '../database/db.js';
+import db from '../database/db-auto.js';
 
 // ====================================
 // LISTA BLANCA DE EMAILS AUTORIZADOS

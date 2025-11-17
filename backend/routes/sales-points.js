@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, param, query } from 'express-validator';
-import db from '../database/db.js';
+import db from '../database/db-auto.js';
 import { checkJwt, ensureUser } from '../middleware/auth.js';
 
 const router = express.Router();

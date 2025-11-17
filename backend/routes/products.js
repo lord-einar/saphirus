@@ -1,6 +1,6 @@
 import express from 'express';
 import { query, param } from 'express-validator';
-import db from '../database/db.js';
+import db from '../database/db-auto.js';
 import { scrapeProductDetail } from '../services/scraper.js';
 
 const router = express.Router();

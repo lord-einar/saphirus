@@ -14,7 +14,7 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import db from './database/db.js';
+import db from './database/db-auto.js';
 import { scrapeProductDetail } from './services/scraper.js';
 
 const __filename = fileURLToPath(import.meta.url);

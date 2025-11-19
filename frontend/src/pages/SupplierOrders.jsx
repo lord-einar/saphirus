@@ -304,12 +304,17 @@ export default function SupplierOrders() {
                       -
                     </button>
                     <input
-                      type="number"
-                      min="1"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={order.quantity}
-                      onChange={(e) => updateQuantity(order.id, parseInt(e.target.value) || 1)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        updateQuantity(order.id, value === '' ? 1 : parseInt(value));
+                      }}
                       className="w-16 px-2 py-1 border rounded text-center"
                       disabled={order.status === 'received'}
+                      placeholder="1"
                     />
                     <button
                       onClick={() => updateQuantity(order.id, order.quantity + 1)}
@@ -413,12 +418,16 @@ export default function SupplierOrders() {
                     Cantidad a pedir *
                   </label>
                   <input
-                    type="number"
-                    min="1"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={addQuantity}
-                    onChange={(e) => setAddQuantity(parseInt(e.target.value) || 1)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setAddQuantity(value === '' ? 1 : parseInt(value));
+                    }}
                     className="input w-32"
-                    placeholder="Cantidad"
+                    placeholder="1"
                   />
                 </div>
 
@@ -486,12 +495,16 @@ export default function SupplierOrders() {
                   <div className="flex items-center gap-2 mb-3">
                     <label className="text-sm">Cantidad recibida:</label>
                     <input
-                      type="number"
-                      min="1"
-                      max={receivingOrder.quantity}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={receiveQuantity}
-                      onChange={(e) => setReceiveQuantity(parseInt(e.target.value) || 1)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        setReceiveQuantity(value === '' ? 1 : parseInt(value));
+                      }}
                       className="input w-24"
+                      placeholder="1"
                     />
                     <span className="text-sm text-gray-600">de {receivingOrder.quantity}</span>
                   </div>

@@ -312,15 +312,17 @@ export default function SalesPointDetail() {
                           -
                         </button>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={item.quantity_sold}
                           onChange={(e) => {
-                            const val = parseInt(e.target.value) || 0;
+                            const value = e.target.value.replace(/[^0-9]/g, '');
+                            const val = value === '' ? 0 : parseInt(value);
                             handleUpdateSold(item, val);
                           }}
                           className="w-16 text-center border border-gray-300 rounded px-1 py-1 text-sm"
-                          min="0"
-                          max={item.quantity_assigned}
+                          placeholder="0"
                         />
                         <button
                           onClick={() => handleUpdateSold(item, item.quantity_sold + 1)}
@@ -460,11 +462,16 @@ export default function SalesPointDetail() {
                       Cantidad *
                     </label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={quantity}
-                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        setQuantity(value === '' ? 1 : parseInt(value));
+                      }}
                       className="input"
-                      min="1"
+                      placeholder="1"
                       required
                     />
                   </div>
@@ -473,12 +480,18 @@ export default function SalesPointDetail() {
                       Precio de venta *
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
                       value={price}
-                      onChange={(e) => setPrice(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9.]/g, '');
+                        if (value.split('.').length <= 2) {
+                          setPrice(value);
+                        }
+                      }}
                       className="input"
-                      min="0"
+                      placeholder="0.00"
                       required
                     />
                   </div>

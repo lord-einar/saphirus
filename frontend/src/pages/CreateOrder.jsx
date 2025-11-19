@@ -263,11 +263,16 @@ export default function CreateOrder() {
                             -
                           </button>
                           <input
-                            type="number"
-                            min="1"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             value={item.quantity}
-                            onChange={(e) => updateQuantity(item.product_id, parseInt(e.target.value) || 1)}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/[^0-9]/g, '');
+                              updateQuantity(item.product_id, value === '' ? 1 : parseInt(value));
+                            }}
                             className="w-16 px-2 py-1 border rounded text-center"
+                            placeholder="1"
                           />
                           <button
                             onClick={() => updateQuantity(item.product_id, item.quantity + 1)}

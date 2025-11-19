@@ -212,12 +212,16 @@ export default function Inventory() {
                     Stock inicial *
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={newStock}
-                    onChange={(e) => setNewStock(parseInt(e.target.value) || 0)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setNewStock(value === '' ? 0 : parseInt(value));
+                    }}
                     className="input"
-                    placeholder="Cantidad de unidades"
+                    placeholder="0"
                   />
                 </div>
 

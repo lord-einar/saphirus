@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { getInventory, updateInventoryStock, removeFromInventory, getProducts, addToInventory } from '../utils/api';
+import { getInventory, updateInventoryStock, removeFromInventory, addToInventory } from '../utils/api';
 import toast from 'react-hot-toast';
+import ProductPicker from '../components/ProductPicker';
 
 export default function Inventory() {
   const [inventory, setInventory] = useState([]);
-  const [allProducts, setAllProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -12,7 +12,6 @@ export default function Inventory() {
 
   useEffect(() => {
     loadInventory();
-    loadAllProducts();
   }, []);
 
   const loadInventory = async () => {
@@ -24,15 +23,6 @@ export default function Inventory() {
       toast.error('Error al cargar inventario');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadAllProducts = async () => {
-    try {
-      const response = await getProducts({ limit: 1000 });
-      setAllProducts(response.data.products);
-    } catch (error) {
-      console.error('Error al cargar productos:', error);
     }
   };
 
@@ -62,9 +52,18 @@ export default function Inventory() {
     }
   };
 
+  const handleSelectProduct = (product) => {
+    setSelectedProduct(product);
+  };
+
   const handleAddProduct = async () => {
     if (!selectedProduct) {
       toast.error('Selecciona un producto');
+      return;
+    }
+
+    if (newStock < 0) {
+      toast.error('El stock debe ser mayor o igual a 0');
       return;
     }
 
@@ -81,9 +80,8 @@ export default function Inventory() {
     }
   };
 
-  const availableProducts = allProducts.filter(
-    p => !inventory.some(i => i.product_id === p.id)
-  );
+  // IDs de productos ya en inventario para excluir del picker
+  const excludedProductIds = inventory.map(item => item.product_id);
 
   if (loading) {
     return (
@@ -179,63 +177,85 @@ export default function Inventory() {
       {/* Modal para agregar producto */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6">
             <h2 className="text-2xl font-bold mb-4">Agregar producto al inventario</h2>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Seleccionar producto
-                </label>
-                <select
-                  className="input"
-                  value={selectedProduct?.id || ''}
-                  onChange={(e) => {
-                    const product = availableProducts.find(p => p.id === parseInt(e.target.value));
-                    setSelectedProduct(product);
-                  }}
-                >
-                  <option value="">Selecciona un producto</option>
-                  {availableProducts.map(product => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} - {product.brand} - ${product.price?.toFixed(2)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Product Picker */}
+            <ProductPicker
+              onSelect={handleSelectProduct}
+              excludeIds={excludedProductIds}
+            />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Stock inicial
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={newStock}
-                  onChange={(e) => setNewStock(parseInt(e.target.value) || 0)}
-                  className="input"
-                />
-              </div>
+            {/* Producto seleccionado */}
+            {selectedProduct && (
+              <div className="border-t mt-6 pt-6">
+                <h3 className="font-semibold mb-3">Producto seleccionado:</h3>
+                <div className="bg-gray-50 p-4 rounded-lg mb-4 flex items-center gap-4">
+                  {selectedProduct.image_url && (
+                    <img
+                      src={selectedProduct.image_url}
+                      alt={selectedProduct.name}
+                      className="w-16 h-16 object-cover rounded"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{selectedProduct.name}</p>
+                    <p className="text-sm text-gray-600">{selectedProduct.brand}</p>
+                    <p className="text-sm font-semibold text-primary-600">
+                      ${selectedProduct.price?.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handleAddProduct}
-                  className="btn-primary flex-1"
-                >
-                  Agregar
-                </button>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Stock inicial *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newStock}
+                    onChange={(e) => setNewStock(parseInt(e.target.value) || 0)}
+                    className="input"
+                    placeholder="Cantidad de unidades"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setSelectedProduct(null);
+                      setNewStock(0);
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddProduct}
+                    className="btn-primary flex-1"
+                  >
+                    Agregar al Inventario
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!selectedProduct && (
+              <div className="flex justify-end mt-4">
                 <button
                   onClick={() => {
                     setShowAddModal(false);
                     setSelectedProduct(null);
                     setNewStock(0);
                   }}
-                  className="btn-secondary flex-1"
+                  className="btn-secondary"
                 >
-                  Cancelar
+                  Cerrar
                 </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

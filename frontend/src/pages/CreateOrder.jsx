@@ -1,22 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getProducts, getBrands, getCategories, getInventory, createOrder, createSupplierOrder } from '../utils/api';
+import { getInventory, createOrder, createSupplierOrder } from '../utils/api';
 import toast from 'react-hot-toast';
+import ProductPicker from '../components/ProductPicker';
 
 export default function CreateOrder() {
   const navigate = useNavigate();
 
-  // Filtros de productos
-  const [brands, setBrands] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [selectedBrand, setSelectedBrand] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [search, setSearch] = useState('');
+  // Modal para seleccionar producto
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
-  // Productos e inventario
-  const [products, setProducts] = useState([]);
+  // Inventario
   const [inventory, setInventory] = useState({});
-  const [loading, setLoading] = useState(false);
 
   // Carrito del pedido
   const [orderItems, setOrderItems] = useState([]);
@@ -31,52 +27,8 @@ export default function CreateOrder() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    loadBrands();
     loadInventory();
   }, []);
-
-  useEffect(() => {
-    loadCategories(selectedBrand);
-  }, [selectedBrand]);
-
-  useEffect(() => {
-    loadProducts();
-  }, [selectedBrand, selectedCategory, search]);
-
-  const loadBrands = async () => {
-    try {
-      const response = await getBrands();
-      setBrands(response.data);
-    } catch (error) {
-      console.error('Error al cargar marcas:', error);
-    }
-  };
-
-  const loadCategories = async (brand = '') => {
-    try {
-      const response = await getCategories(brand ? { brand } : {});
-      setCategories(response.data);
-    } catch (error) {
-      console.error('Error al cargar categorías:', error);
-    }
-  };
-
-  const loadProducts = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (selectedBrand) params.brand = selectedBrand;
-      if (selectedCategory) params.category = selectedCategory;
-      if (search) params.search = search;
-
-      const response = await getProducts(params);
-      setProducts(response.data.products);
-    } catch (error) {
-      console.error('Error al cargar productos:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadInventory = async () => {
     try {
@@ -95,30 +47,33 @@ export default function CreateOrder() {
     return inventory[productId] || 0;
   };
 
-  const handleBrandChange = (e) => {
-    setSelectedBrand(e.target.value);
-    setSelectedCategory('');
+  const handleSelectProduct = (product) => {
+    setSelectedProduct(product);
   };
 
-  const addToOrder = (product) => {
-    const existing = orderItems.find(item => item.product_id === product.id);
-
-    if (existing) {
-      setOrderItems(orderItems.map(item =>
-        item.product_id === product.id
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
-    } else {
-      setOrderItems([...orderItems, {
-        product_id: product.id,
-        product: product,
-        quantity: 1,
-        price: product.price
-      }]);
+  const addToOrder = () => {
+    if (!selectedProduct) {
+      toast.error('Selecciona un producto');
+      return;
     }
 
-    toast.success(`${product.name} agregado al pedido`);
+    const existing = orderItems.find(item => item.product_id === selectedProduct.id);
+
+    if (existing) {
+      toast.error('Este producto ya está en el pedido');
+      return;
+    }
+
+    setOrderItems([...orderItems, {
+      product_id: selectedProduct.id,
+      product: selectedProduct,
+      quantity: 1,
+      price: selectedProduct.price
+    }]);
+
+    toast.success(`${selectedProduct.name} agregado al pedido`);
+    setShowAddModal(false);
+    setSelectedProduct(null);
   };
 
   const updateQuantity = (productId, newQuantity) => {
@@ -216,6 +171,9 @@ export default function CreateOrder() {
     return orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
+  // IDs de productos ya en el pedido para excluir del picker
+  const excludedProductIds = orderItems.map(item => item.product_id);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -224,126 +182,70 @@ export default function CreateOrder() {
           onClick={() => navigate('/dashboard/pedidos')}
           className="btn-secondary"
         >
-          ← Volver a pedidos
+          Volver a pedidos
         </button>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Panel izquierdo - Búsqueda de productos */}
+        {/* Panel izquierdo - Seleccionar productos */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Filtros */}
           <div className="card">
-            <h3 className="font-semibold text-lg mb-4">Buscar productos</h3>
-
-            <div className="grid md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Marca
-                </label>
-                <select
-                  value={selectedBrand}
-                  onChange={handleBrandChange}
-                  className="input"
-                >
-                  <option value="">Todas las marcas</option>
-                  {brands.map(brand => (
-                    <option
-                      key={typeof brand === 'string' ? brand : brand.name}
-                      value={typeof brand === 'string' ? brand : brand.name}
-                    >
-                      {typeof brand === 'string' ? brand : brand.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Categoría
-                </label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="input"
-                  disabled={!selectedBrand}
-                >
-                  <option value="">Todas las categorías</option>
-                  {categories.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Buscar
-                </label>
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Nombre del producto..."
-                  className="input"
-                />
-              </div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-lg">Productos del pedido</h3>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="btn-primary"
+              >
+                + Agregar producto
+              </button>
             </div>
-          </div>
 
-          {/* Lista de productos */}
-          <div className="card">
-            <h3 className="font-semibold text-lg mb-4">
-              Productos disponibles ({products.length})
-            </h3>
-
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+            {orderItems.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <p className="mb-2">No hay productos en el pedido</p>
+                <p className="text-sm">Haz clic en "Agregar producto" para comenzar</p>
               </div>
-            ) : products.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">
-                No se encontraron productos
-              </p>
             ) : (
-              <div className="max-h-[600px] overflow-y-auto space-y-2">
-                {products.map(product => {
-                  const myStock = getStock(product.id);
-                  const inOrder = orderItems.find(item => item.product_id === product.id);
-
-                  // Verificar si tiene stock en la tienda oficial (label "Sin Stock")
-                  const labels = product.labels ? JSON.parse(product.labels) : [];
+              <div className="space-y-3">
+                {orderItems.map(item => {
+                  const stock = getStock(item.product_id);
+                  const needsOrder = item.quantity > stock;
+                  const labels = item.product.labels ? JSON.parse(item.product.labels) : [];
                   const hasStockInStore = !labels.includes('Sin Stock');
 
                   return (
-                    <div
-                      key={product.id}
-                      className="flex items-center gap-4 p-3 border rounded-lg hover:bg-gray-50"
-                    >
-                      {product.image_url && (
+                    <div key={item.product_id} className="flex items-center gap-4 p-4 border rounded-lg">
+                      {item.product.image_url && (
                         <img
-                          src={product.image_url}
-                          alt={product.name}
+                          src={item.product.image_url}
+                          alt={item.product.name}
                           className="w-16 h-16 object-cover rounded"
                         />
                       )}
 
                       <div className="flex-1 min-w-0">
                         <h4 className="font-medium text-gray-900 truncate">
-                          {product.name}
+                          {item.product.name}
                         </h4>
                         <p className="text-sm text-gray-600">
-                          {product.brand} • {product.category}
+                          {item.product.brand} • {item.product.category}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-lg font-bold text-primary-600">
-                            ${product.price?.toFixed(2)}
+                            ${item.price?.toFixed(2)}
                           </span>
                           <span className={`text-xs px-2 py-1 rounded ${
-                            myStock > 0
+                            stock > 0
                               ? 'bg-green-100 text-green-800'
                               : 'bg-yellow-100 text-yellow-800'
                           }`}>
-                            {myStock > 0 ? `Mi stock: ${myStock}` : 'Sin stock propio'}
+                            Stock: {stock}
                           </span>
+                          {needsOrder && (
+                            <span className="text-xs px-2 py-1 rounded bg-orange-100 text-orange-800">
+                              Stock insuficiente
+                            </span>
+                          )}
                           {!hasStockInStore && (
                             <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-800">
                               Sin stock en tienda
@@ -352,30 +254,39 @@ export default function CreateOrder() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
-                        {!hasStockInStore ? (
-                          // Sin stock en la tienda oficial
-                          <span className="text-sm text-red-600 font-medium">
-                            Sin stock en la tienda
-                          </span>
-                        ) : myStock > 0 ? (
-                          // Tengo stock propio
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={() => addToOrder(product)}
-                            className="btn-primary text-sm"
-                            disabled={inOrder}
+                            onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
+                            className="w-8 h-8 rounded border hover:bg-gray-100"
                           >
-                            {inOrder ? '✓ Agregado' : '+ Agregar'}
+                            -
                           </button>
-                        ) : (
-                          // No tengo stock pero sí hay en tienda
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateQuantity(item.product_id, parseInt(e.target.value) || 1)}
+                            className="w-16 px-2 py-1 border rounded text-center"
+                          />
                           <button
-                            onClick={() => addToSupplierOrder(product)}
-                            className="btn-secondary text-sm whitespace-nowrap"
+                            onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
+                            className="w-8 h-8 rounded border hover:bg-gray-100"
                           >
-                            📋 Pedir
+                            +
                           </button>
-                        )}
+                        </div>
+
+                        <span className="text-lg font-semibold text-gray-900 min-w-[80px] text-right">
+                          ${(item.price * item.quantity).toFixed(2)}
+                        </span>
+
+                        <button
+                          onClick={() => removeFromOrder(item.product_id)}
+                          className="text-red-600 hover:text-red-800 p-2"
+                        >
+                          X
+                        </button>
                       </div>
                     </div>
                   );
@@ -461,49 +372,7 @@ export default function CreateOrder() {
               </p>
             ) : (
               <>
-                <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-                  {orderItems.map(item => {
-                    const stock = getStock(item.product_id);
-                    const needsOrder = item.quantity > stock;
-
-                    return (
-                      <div key={item.product_id} className="flex items-start gap-2 text-sm">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{item.product.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) => updateQuantity(item.product_id, parseInt(e.target.value))}
-                              className="w-16 px-2 py-1 border rounded text-center"
-                            />
-                            <span className="text-gray-600">
-                              × ${item.price}
-                            </span>
-                            {needsOrder && (
-                              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                                ⚠️ Stock insuf.
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-gray-900 font-semibold mt-1">
-                            ${(item.price * item.quantity).toFixed(2)}
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={() => removeFromOrder(item.product_id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="border-t pt-3">
+                <div className="border-t border-b py-3 mb-3">
                   <div className="flex justify-between items-center text-lg font-bold">
                     <span>Total:</span>
                     <span className="text-primary-600">
@@ -515,7 +384,7 @@ export default function CreateOrder() {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || orderItems.length === 0}
-                  className="btn-primary w-full mt-4"
+                  className="btn-primary w-full"
                 >
                   {submitting ? 'Creando pedido...' : 'Crear pedido'}
                 </button>
@@ -524,6 +393,96 @@ export default function CreateOrder() {
           </div>
         </div>
       </div>
+
+      {/* Modal para agregar producto */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Agregar producto al pedido</h2>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSelectedProduct(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                X
+              </button>
+            </div>
+
+            {/* Product Picker */}
+            <ProductPicker
+              onSelect={handleSelectProduct}
+              excludeIds={excludedProductIds}
+            />
+
+            {/* Producto seleccionado */}
+            {selectedProduct && (
+              <div className="border-t mt-6 pt-6">
+                <h3 className="font-semibold mb-3">Producto seleccionado:</h3>
+                <div className="bg-gray-50 p-4 rounded-lg mb-4 flex items-center gap-4">
+                  {selectedProduct.image_url && (
+                    <img
+                      src={selectedProduct.image_url}
+                      alt={selectedProduct.name}
+                      className="w-16 h-16 object-cover rounded"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{selectedProduct.name}</p>
+                    <p className="text-sm text-gray-600">{selectedProduct.brand} • {selectedProduct.category}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-sm font-semibold text-primary-600">
+                        ${selectedProduct.price?.toFixed(2)}
+                      </p>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        getStock(selectedProduct.id) > 0
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        Stock: {getStock(selectedProduct.id)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setSelectedProduct(null);
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={addToOrder}
+                    className="btn-primary flex-1"
+                  >
+                    Agregar al pedido
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!selectedProduct && (
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setSelectedProduct(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Cerrar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

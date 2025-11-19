@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getSupplierOrders, updateSupplierOrder, deleteSupplierOrder, createSupplierOrder, getProducts } from '../utils/api';
+import { getSupplierOrders, updateSupplierOrder, deleteSupplierOrder, createSupplierOrder } from '../utils/api';
 import toast from 'react-hot-toast';
+import ProductPicker from '../components/ProductPicker';
 
 export default function SupplierOrders() {
   const [orders, setOrders] = useState([]);
@@ -9,8 +10,6 @@ export default function SupplierOrders() {
 
   // Modal agregar producto
   const [showAddModal, setShowAddModal] = useState(false);
-  const [products, setProducts] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [addQuantity, setAddQuantity] = useState(1);
 
@@ -22,12 +21,6 @@ export default function SupplierOrders() {
   useEffect(() => {
     loadOrders();
   }, [filter]);
-
-  useEffect(() => {
-    if (searchTerm.length >= 2) {
-      loadProducts();
-    }
-  }, [searchTerm]);
 
   const loadOrders = async () => {
     setLoading(true);
@@ -42,18 +35,18 @@ export default function SupplierOrders() {
     }
   };
 
-  const loadProducts = async () => {
-    try {
-      const response = await getProducts({ search: searchTerm });
-      setProducts(response.data.products);
-    } catch (error) {
-      console.error('Error al cargar productos:', error);
-    }
+  const handleSelectProduct = (product) => {
+    setSelectedProduct(product);
   };
 
   const handleAddProduct = async () => {
-    if (!selectedProduct || addQuantity <= 0) {
-      toast.error('Selecciona un producto y cantidad válida');
+    if (!selectedProduct) {
+      toast.error('Selecciona un producto');
+      return;
+    }
+
+    if (addQuantity <= 0) {
+      toast.error('La cantidad debe ser mayor a 0');
       return;
     }
 
@@ -67,7 +60,6 @@ export default function SupplierOrders() {
       setShowAddModal(false);
       setSelectedProduct(null);
       setAddQuantity(1);
-      setSearchTerm('');
       loadOrders();
     } catch (error) {
       console.error('Error al agregar producto:', error);
@@ -181,6 +173,9 @@ export default function SupplierOrders() {
     });
     return totals;
   };
+
+  // IDs de productos ya en la lista para excluir del picker
+  const excludedProductIds = orders.map(order => order.product_id);
 
   const totals = getTotalByStatus();
 
@@ -371,112 +366,97 @@ export default function SupplierOrders() {
       {/* Modal: Agregar producto */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold">Agregar producto a lista</h3>
-                <button
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setSelectedProduct(null);
-                    setSearchTerm('');
-                  }}
-                  className="text-gray-500 hover:text-gray-700 text-2xl"
-                >
-                  ×
-                </button>
-              </div>
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Agregar producto a lista de pedidos</h2>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSelectedProduct(null);
+                  setAddQuantity(1);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                X
+              </button>
+            </div>
 
-              <div className="space-y-4">
-                <div>
+            {/* Product Picker */}
+            <ProductPicker
+              onSelect={handleSelectProduct}
+              excludeIds={excludedProductIds}
+            />
+
+            {/* Producto seleccionado */}
+            {selectedProduct && (
+              <div className="border-t mt-6 pt-6">
+                <h3 className="font-semibold mb-3">Producto seleccionado:</h3>
+                <div className="bg-gray-50 p-4 rounded-lg mb-4 flex items-center gap-4">
+                  {selectedProduct.image_url && (
+                    <img
+                      src={selectedProduct.image_url}
+                      alt={selectedProduct.name}
+                      className="w-16 h-16 object-cover rounded"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{selectedProduct.name}</p>
+                    <p className="text-sm text-gray-600">{selectedProduct.brand} • {selectedProduct.category}</p>
+                    <p className="text-sm font-semibold text-primary-600">
+                      ${selectedProduct.price?.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Buscar producto
+                    Cantidad a pedir *
                   </label>
                   <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Buscar por nombre..."
-                    className="input"
-                    autoFocus
+                    type="number"
+                    min="1"
+                    value={addQuantity}
+                    onChange={(e) => setAddQuantity(parseInt(e.target.value) || 1)}
+                    className="input w-32"
+                    placeholder="Cantidad"
                   />
                 </div>
 
-                {searchTerm.length >= 2 && products.length > 0 && !selectedProduct && (
-                  <div className="max-h-60 overflow-y-auto border rounded-lg">
-                    {products.map(product => (
-                      <div
-                        key={product.id}
-                        onClick={() => setSelectedProduct(product)}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                      >
-                        {product.image_url && (
-                          <img src={product.image_url} alt={product.name} className="w-12 h-12 object-cover rounded" />
-                        )}
-                        <div className="flex-1">
-                          <p className="font-medium">{product.name}</p>
-                          <p className="text-sm text-gray-600">{product.brand} • {product.category}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {selectedProduct && (
-                  <div className="border rounded-lg p-4 bg-blue-50">
-                    <p className="text-sm text-gray-600 mb-2">Producto seleccionado:</p>
-                    <div className="flex items-center gap-3">
-                      {selectedProduct.image_url && (
-                        <img src={selectedProduct.image_url} alt={selectedProduct.name} className="w-16 h-16 object-cover rounded" />
-                      )}
-                      <div className="flex-1">
-                        <p className="font-semibold">{selectedProduct.name}</p>
-                        <p className="text-sm text-gray-600">{selectedProduct.brand} • {selectedProduct.category}</p>
-                      </div>
-                      <button
-                        onClick={() => setSelectedProduct(null)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Cambiar
-                      </button>
-                    </div>
-
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Cantidad
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={addQuantity}
-                        onChange={(e) => setAddQuantity(parseInt(e.target.value) || 1)}
-                        className="input w-32"
-                      />
-                    </div>
-                  </div>
-                )}
-
                 <div className="flex gap-3">
-                  <button
-                    onClick={handleAddProduct}
-                    disabled={!selectedProduct}
-                    className="btn-primary flex-1 disabled:opacity-50"
-                  >
-                    Agregar a lista
-                  </button>
                   <button
                     onClick={() => {
                       setShowAddModal(false);
                       setSelectedProduct(null);
-                      setSearchTerm('');
+                      setAddQuantity(1);
                     }}
                     className="btn-secondary flex-1"
                   >
                     Cancelar
                   </button>
+                  <button
+                    onClick={handleAddProduct}
+                    className="btn-primary flex-1"
+                  >
+                    Agregar a la lista
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
+
+            {!selectedProduct && (
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setSelectedProduct(null);
+                    setAddQuantity(1);
+                  }}
+                  className="btn-secondary"
+                >
+                  Cerrar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -12,7 +12,7 @@ router.get('/', [
   query('search').optional().isString(),
   query('limit').optional().isInt({ min: 1, max: 10000 }),
   query('offset').optional().isInt({ min: 0 })
-], (req, res) => {
+], async (req, res) => {
   try {
     const { brand, category, search, limit = 10000, offset = 0 } = req.query;
 
@@ -38,7 +38,7 @@ router.get('/', [
     sql += ' ORDER BY name ASC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
 
-    const products = db.prepare(sql).all(...params);
+    const products = await db.prepare(sql).all(...params);
 
     // Obtener total de productos para paginación
     let countSql = 'SELECT COUNT(*) as total FROM products WHERE is_active = 1';
@@ -60,7 +60,7 @@ router.get('/', [
       countParams.push(searchTerm, searchTerm, searchTerm);
     }
 
-    const { total } = db.prepare(countSql).get(...countParams);
+    const { total } = await db.prepare(countSql).get(...countParams);
 
     res.json({
       products,
@@ -75,9 +75,9 @@ router.get('/', [
 });
 
 // Obtener marcas únicas con logos
-router.get('/brands', (req, res) => {
+router.get('/brands', async (req, res) => {
   try {
-    const brands = db.prepare(`
+    const brands = await db.prepare(`
       SELECT DISTINCT p.brand
       FROM products p
       WHERE p.is_active = 1 AND p.brand IS NOT NULL AND p.brand != ''
@@ -85,13 +85,13 @@ router.get('/brands', (req, res) => {
     `).all();
 
     // Obtener logos de la tabla brands
-    const brandsWithLogos = brands.map(b => {
-      const brandInfo = db.prepare('SELECT logo_url FROM brands WHERE name = ?').get(b.brand);
+    const brandsWithLogos = await Promise.all(brands.map(async b => {
+      const brandInfo = await db.prepare('SELECT logo_url FROM brands WHERE name = ?').get(b.brand);
       return {
         name: b.brand,
         logo: brandInfo?.logo_url || null
       };
-    });
+    }));
 
     res.json(brandsWithLogos);
   } catch (error) {
@@ -103,7 +103,7 @@ router.get('/brands', (req, res) => {
 // Obtener categorías únicas (opcionalmente filtradas por marca)
 router.get('/categories', [
   query('brand').optional().isString()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { brand } = req.query;
 
@@ -121,7 +121,7 @@ router.get('/categories', [
 
     sql += ' ORDER BY category ASC';
 
-    const categories = db.prepare(sql).all(...params);
+    const categories = await db.prepare(sql).all(...params);
 
     res.json(categories.map(c => c.category));
   } catch (error) {
@@ -131,9 +131,9 @@ router.get('/categories', [
 });
 
 // Listar productos nuevos
-router.get('/new', (req, res) => {
+router.get('/new', async (req, res) => {
   try {
-    const products = db.prepare(`
+    const products = await db.prepare(`
       SELECT * FROM products
       WHERE is_active = 1 AND is_new = 1
       ORDER BY created_at DESC
@@ -147,9 +147,9 @@ router.get('/new', (req, res) => {
 });
 
 // Listar productos dados de baja
-router.get('/removed', (req, res) => {
+router.get('/removed', async (req, res) => {
   try {
-    const products = db.prepare(`
+    const products = await db.prepare(`
       SELECT * FROM products
       WHERE is_active = 0
       ORDER BY updated_at DESC
@@ -169,7 +169,7 @@ router.get('/:id', [
 ], async (req, res) => {
   try {
     const { id } = req.params;
-    let product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    let product = await db.prepare('SELECT * FROM products WHERE id = ?').get(id);
 
     if (!product) {
       return res.status(404).json({ error: 'Producto no encontrado' });
@@ -191,7 +191,7 @@ router.get('/:id', [
         WHERE id = ?
       `);
 
-      updateStmt.run(details.description, details.attributes, details.sku, id);
+      await updateStmt.run(details.description, details.attributes, details.sku, id);
 
       // Guardar logo de marca si está disponible
       if (details.brandName && details.brandLogoUrl) {
@@ -203,12 +203,12 @@ router.get('/:id', [
             updated_at = CURRENT_TIMESTAMP
         `);
 
-        upsertBrandStmt.run(details.brandName, details.brandLogoUrl);
+        await upsertBrandStmt.run(details.brandName, details.brandLogoUrl);
         console.log(`✓ Logo de marca guardado: ${details.brandName}`);
       }
 
       // Obtener el producto actualizado
-      product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+      product = await db.prepare('SELECT * FROM products WHERE id = ?').get(id);
     }
 
     res.json(product);

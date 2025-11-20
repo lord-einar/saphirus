@@ -13,7 +13,7 @@ router.use(checkJwt, ensureUser);
 // Listar todos los puestos de venta del usuario
 router.get('/', [
   query('status').optional().isIn(['active', 'inactive', 'all'])
-], (req, res) => {
+], async (req, res) => {
   try {
     const { status = 'all' } = req.query;
     const userId = req.user.id;
@@ -28,11 +28,11 @@ router.get('/', [
 
     sql += ' ORDER BY created_at DESC';
 
-    const salesPoints = db.prepare(sql).all(...params);
+    const salesPoints = await db.prepare(sql).all(...params);
 
     // Para cada puesto, calcular estadísticas
-    const salesPointsWithStats = salesPoints.map(sp => {
-      const stats = db.prepare(`
+    const salesPointsWithStats = await Promise.all(salesPoints.map(async sp => {
+      const stats = await db.prepare(`
         SELECT
           COUNT(*) as total_products,
           SUM(quantity_assigned) as total_assigned,
@@ -55,7 +55,7 @@ router.get('/', [
           total_expected: 0
         }
       };
-    });
+    }));
 
     res.json(salesPointsWithStats);
   } catch (error) {
@@ -67,12 +67,12 @@ router.get('/', [
 // Obtener un puesto de venta específico
 router.get('/:id', [
   param('id').isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const salesPoint = db.prepare(`
+    const salesPoint = await db.prepare(`
       SELECT * FROM sales_points
       WHERE id = ? AND user_id = ?
     `).get(id, userId);
@@ -82,7 +82,7 @@ router.get('/:id', [
     }
 
     // Obtener estadísticas
-    const stats = db.prepare(`
+    const stats = await db.prepare(`
       SELECT
         COUNT(*) as total_products,
         SUM(quantity_assigned) as total_assigned,
@@ -118,17 +118,17 @@ router.post('/', [
   body('contact_name').optional().trim(),
   body('contact_phone').optional().trim(),
   body('notes').optional().trim()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { name, location, contact_name, contact_phone, notes } = req.body;
     const userId = req.user.id;
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO sales_points (user_id, name, location, contact_name, contact_phone, notes, status)
       VALUES (?, ?, ?, ?, ?, ?, 'active')
     `).run(userId, name, location || null, contact_name || null, contact_phone || null, notes || null);
 
-    const newSalesPoint = db.prepare('SELECT * FROM sales_points WHERE id = ?').get(result.lastInsertRowid);
+    const newSalesPoint = await db.prepare('SELECT * FROM sales_points WHERE id = ?').get(result.lastInsertRowid);
 
     res.status(201).json(newSalesPoint);
   } catch (error) {
@@ -146,14 +146,14 @@ router.put('/:id', [
   body('contact_phone').optional().trim(),
   body('notes').optional().trim(),
   body('status').optional().isIn(['active', 'inactive'])
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
     const { name, location, contact_name, contact_phone, notes, status } = req.body;
 
     // Verificar que el puesto pertenece al usuario
-    const existing = db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(id, userId);
+    const existing = await db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(id, userId);
     if (!existing) {
       return res.status(404).json({ error: 'Puesto de venta no encontrado' });
     }
@@ -193,13 +193,13 @@ router.put('/:id', [
     updates.push('updated_at = CURRENT_TIMESTAMP');
     params.push(id);
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE sales_points
       SET ${updates.join(', ')}
       WHERE id = ?
     `).run(...params);
 
-    const updated = db.prepare('SELECT * FROM sales_points WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM sales_points WHERE id = ?').get(id);
     res.json(updated);
   } catch (error) {
     console.error('Error al actualizar puesto de venta:', error);
@@ -210,17 +210,17 @@ router.put('/:id', [
 // Eliminar puesto de venta
 router.delete('/:id', [
   param('id').isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const existing = db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(id, userId);
+    const existing = await db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(id, userId);
     if (!existing) {
       return res.status(404).json({ error: 'Puesto de venta no encontrado' });
     }
 
-    db.prepare('DELETE FROM sales_points WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM sales_points WHERE id = ?').run(id);
     res.json({ message: 'Puesto de venta eliminado exitosamente' });
   } catch (error) {
     console.error('Error al eliminar puesto de venta:', error);
@@ -233,18 +233,18 @@ router.delete('/:id', [
 // Obtener inventario de un puesto de venta
 router.get('/:id/inventory', [
   param('id').isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
     // Verificar que el puesto pertenece al usuario
-    const salesPoint = db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(id, userId);
+    const salesPoint = await db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(id, userId);
     if (!salesPoint) {
       return res.status(404).json({ error: 'Puesto de venta no encontrado' });
     }
 
-    const inventory = db.prepare(`
+    const inventory = await db.prepare(`
       SELECT
         spi.*,
         p.name as product_name,
@@ -273,33 +273,33 @@ router.post('/:id/inventory', [
   body('product_id').isInt(),
   body('quantity').isInt({ min: 1 }),
   body('price').isFloat({ min: 0 })
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
     const { product_id, quantity, price } = req.body;
     const userId = req.user.id;
 
     // Verificar que el puesto pertenece al usuario
-    const salesPoint = db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(id, userId);
+    const salesPoint = await db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(id, userId);
     if (!salesPoint) {
       return res.status(404).json({ error: 'Puesto de venta no encontrado' });
     }
 
     // Verificar que el producto existe
-    const product = db.prepare('SELECT id FROM products WHERE id = ?').get(product_id);
+    const product = await db.prepare('SELECT id FROM products WHERE id = ?').get(product_id);
     if (!product) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
     // Verificar si ya existe este producto en el puesto
-    const existing = db.prepare(`
+    const existing = await db.prepare(`
       SELECT id, quantity_assigned FROM sales_point_inventory
       WHERE sales_point_id = ? AND product_id = ?
     `).get(id, product_id);
 
     if (existing) {
       // Si ya existe, sumar a la cantidad asignada
-      db.prepare(`
+      await db.prepare(`
         UPDATE sales_point_inventory
         SET quantity_assigned = quantity_assigned + ?,
             price = ?,
@@ -307,19 +307,19 @@ router.post('/:id/inventory', [
         WHERE id = ?
       `).run(quantity, price, existing.id);
 
-      const updated = db.prepare(`
+      const updated = await db.prepare(`
         SELECT * FROM sales_point_inventory WHERE id = ?
       `).get(existing.id);
 
       return res.json(updated);
     } else {
       // Si no existe, crear nuevo registro
-      const result = db.prepare(`
+      const result = await db.prepare(`
         INSERT INTO sales_point_inventory (sales_point_id, product_id, quantity_assigned, quantity_sold, price)
         VALUES (?, ?, ?, 0, ?)
       `).run(id, product_id, quantity, price);
 
-      const newItem = db.prepare(`
+      const newItem = await db.prepare(`
         SELECT * FROM sales_point_inventory WHERE id = ?
       `).get(result.lastInsertRowid);
 
@@ -336,20 +336,20 @@ router.put('/:salesPointId/inventory/:itemId', [
   param('salesPointId').isInt(),
   param('itemId').isInt(),
   body('quantity_sold').isInt({ min: 0 })
-], (req, res) => {
+], async (req, res) => {
   try {
     const { salesPointId, itemId } = req.params;
     const { quantity_sold } = req.body;
     const userId = req.user.id;
 
     // Verificar que el puesto pertenece al usuario
-    const salesPoint = db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(salesPointId, userId);
+    const salesPoint = await db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(salesPointId, userId);
     if (!salesPoint) {
       return res.status(404).json({ error: 'Puesto de venta no encontrado' });
     }
 
     // Verificar que el item pertenece al puesto
-    const item = db.prepare(`
+    const item = await db.prepare(`
       SELECT * FROM sales_point_inventory
       WHERE id = ? AND sales_point_id = ?
     `).get(itemId, salesPointId);
@@ -365,13 +365,13 @@ router.put('/:salesPointId/inventory/:itemId', [
       });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE sales_point_inventory
       SET quantity_sold = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(quantity_sold, itemId);
 
-    const updated = db.prepare(`
+    const updated = await db.prepare(`
       SELECT * FROM sales_point_inventory WHERE id = ?
     `).get(itemId);
 
@@ -386,19 +386,19 @@ router.put('/:salesPointId/inventory/:itemId', [
 router.delete('/:salesPointId/inventory/:itemId', [
   param('salesPointId').isInt(),
   param('itemId').isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { salesPointId, itemId } = req.params;
     const userId = req.user.id;
 
     // Verificar que el puesto pertenece al usuario
-    const salesPoint = db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(salesPointId, userId);
+    const salesPoint = await db.prepare('SELECT id FROM sales_points WHERE id = ? AND user_id = ?').get(salesPointId, userId);
     if (!salesPoint) {
       return res.status(404).json({ error: 'Puesto de venta no encontrado' });
     }
 
     // Verificar que el item pertenece al puesto
-    const item = db.prepare(`
+    const item = await db.prepare(`
       SELECT id FROM sales_point_inventory
       WHERE id = ? AND sales_point_id = ?
     `).get(itemId, salesPointId);
@@ -407,7 +407,7 @@ router.delete('/:salesPointId/inventory/:itemId', [
       return res.status(404).json({ error: 'Producto no encontrado en el puesto' });
     }
 
-    db.prepare('DELETE FROM sales_point_inventory WHERE id = ?').run(itemId);
+    await db.prepare('DELETE FROM sales_point_inventory WHERE id = ?').run(itemId);
     res.json({ message: 'Producto eliminado del puesto exitosamente' });
   } catch (error) {
     console.error('Error al eliminar producto del puesto:', error);

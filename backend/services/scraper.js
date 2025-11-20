@@ -217,7 +217,7 @@ export async function runScraping() {
     console.log(`\n✓ Total de productos encontrados: ${allProducts.length}`);
 
     // Obtener todos los SKUs actuales en la BD
-    const existingProducts = db.prepare('SELECT sku, id FROM products WHERE is_active = 1').all();
+    const existingProducts = await db.prepare('SELECT sku, id FROM products WHERE is_active = 1').all();
     const existingSkus = new Set(existingProducts.map(p => p.sku));
     const scrapedSkus = new Set(allProducts.map(p => p.sku));
 
@@ -243,14 +243,14 @@ export async function runScraping() {
     `);
 
     // Resetear flag de "nuevo" de productos anteriores
-    resetNewFlagStmt.run();
+    await resetNewFlagStmt.run();
 
     // Procesar productos
-    const transaction = db.transaction(() => {
+    const transaction = db.transaction(async () => {
       for (const product of allProducts) {
         if (existingSkus.has(product.sku)) {
           // Actualizar producto existente
-          updateStmt.run(
+          await updateStmt.run(
             product.name,
             product.brand,
             product.category,
@@ -264,7 +264,7 @@ export async function runScraping() {
           );
         } else {
           // Insertar nuevo producto
-          insertStmt.run(
+          await insertStmt.run(
             product.sku,
             product.name,
             product.brand,
@@ -283,13 +283,13 @@ export async function runScraping() {
       // Desactivar productos que ya no existen
       for (const existingProduct of existingProducts) {
         if (!scrapedSkus.has(existingProduct.sku)) {
-          deactivateStmt.run(existingProduct.sku);
+          await deactivateStmt.run(existingProduct.sku);
           removedProductsCount++;
         }
       }
     });
 
-    transaction();
+    await transaction();
 
     console.log(`✓ Productos nuevos: ${newProductsCount}`);
     console.log(`✓ Productos dados de baja: ${removedProductsCount}`);
@@ -306,7 +306,7 @@ export async function runScraping() {
     VALUES (?, ?, ?, ?, ?)
   `);
 
-  logStmt.run(allProducts.length, newProductsCount, removedProductsCount, status, errorMessage);
+  await logStmt.run(allProducts.length, newProductsCount, removedProductsCount, status, errorMessage);
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`\n✓ Scraping completado en ${duration}s`);

@@ -70,7 +70,7 @@ export const ensureUser = async (req, res, next) => {
     if (!email) {
       console.log('⚠️  Email no encontrado en token ni userinfo, consultando BD...');
       try {
-        const existingUser = db.prepare('SELECT email, name FROM users WHERE auth0_id = ?').get(auth0Id);
+        const existingUser = await db.prepare('SELECT email, name FROM users WHERE auth0_id = ?').get(auth0Id);
         if (existingUser) {
           email = existingUser.email;
           name = name || existingUser.name;
@@ -109,7 +109,7 @@ export const ensureUser = async (req, res, next) => {
     console.log(`✅ Acceso autorizado: ${email}`);
 
     // Buscar usuario existente
-    let user = db.prepare('SELECT * FROM users WHERE auth0_id = ?').get(auth0Id);
+    let user = await db.prepare('SELECT * FROM users WHERE auth0_id = ?').get(auth0Id);
 
     if (!user) {
       // Crear nuevo usuario
@@ -118,9 +118,9 @@ export const ensureUser = async (req, res, next) => {
         VALUES (?, ?, ?, ?)
       `);
 
-      const result = insert.run(auth0Id, email, name || 'Usuario', email);
+      const result = await insert.run(auth0Id, email, name || 'Usuario', email);
 
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
+      user = await db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
       console.log('✓ Nuevo usuario creado:', email);
     }
 

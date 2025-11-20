@@ -22,7 +22,7 @@ router.post('/', [
     // Validar que todos los productos existen y obtener sus precios
     const validatedItems = [];
     for (const item of items) {
-      const product = db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1').get(item.product_id);
+      const product = await db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1').get(item.product_id);
       if (!product) {
         return res.status(400).json({ error: `Producto con ID ${item.product_id} no encontrado` });
       }
@@ -35,38 +35,31 @@ router.post('/', [
       });
     }
 
-    // Crear pedido en transacción
-    const transaction = db.transaction(() => {
-      // Insertar pedido
-      const insertOrder = db.prepare(`
-        INSERT INTO orders (customer_name, customer_lastname, customer_phone, customer_notes)
-        VALUES (?, ?, ?, ?)
-      `);
+    // Insertar pedido
+    const insertOrder = db.prepare(`
+      INSERT INTO orders (customer_name, customer_lastname, customer_phone, customer_notes)
+      VALUES (?, ?, ?, ?)
+    `);
 
-      const orderResult = insertOrder.run(customer_name, customer_lastname, customer_phone, customer_notes || null);
-      const orderId = orderResult.lastInsertRowid;
+    const orderResult = await insertOrder.run(customer_name, customer_lastname, customer_phone, customer_notes || null);
+    const orderId = orderResult.lastInsertRowid;
 
-      // Insertar items del pedido
-      const insertItem = db.prepare(`
-        INSERT INTO order_items (order_id, product_id, quantity, price)
-        VALUES (?, ?, ?, ?)
-      `);
+    // Insertar items del pedido
+    const insertItem = db.prepare(`
+      INSERT INTO order_items (order_id, product_id, quantity, price)
+      VALUES (?, ?, ?, ?)
+    `);
 
-      for (const item of validatedItems) {
-        insertItem.run(orderId, item.product_id, item.quantity, item.price);
-      }
-
-      return orderId;
-    });
-
-    const orderId = transaction();
+    for (const item of validatedItems) {
+      await insertItem.run(orderId, item.product_id, item.quantity, item.price);
+    }
 
     // Obtener el pedido completo para enviar email
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    const order = await db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
 
     // Enviar email al vendedor (obtener email del primer usuario registrado por ahora)
     // En producción, podrías tener múltiples vendedores o un email configurado
-    const vendedor = db.prepare('SELECT notification_email FROM users ORDER BY id ASC LIMIT 1').get();
+    const vendedor = await db.prepare('SELECT notification_email FROM users ORDER BY id ASC LIMIT 1').get();
 
     if (vendedor && vendedor.notification_email) {
       await sendNewOrderEmail({ order, items: validatedItems }, vendedor.notification_email);
@@ -84,7 +77,7 @@ router.post('/', [
 });
 
 // Listar pedidos (requiere autenticación de vendedor)
-router.get('/', checkJwt, ensureUser, (req, res) => {
+router.get('/', checkJwt, ensureUser, async (req, res) => {
   try {
     const { status, limit = 50, offset = 0 } = req.query;
 
@@ -99,7 +92,7 @@ router.get('/', checkJwt, ensureUser, (req, res) => {
     sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
 
-    const orders = db.prepare(sql).all(...params);
+    const orders = await db.prepare(sql).all(...params);
 
     // Obtener total de pedidos
     let countSql = 'SELECT COUNT(*) as total FROM orders';
@@ -107,7 +100,7 @@ router.get('/', checkJwt, ensureUser, (req, res) => {
       countSql += ' WHERE status = ?';
     }
 
-    const { total } = db.prepare(countSql).get(...(status ? [status] : []));
+    const { total } = await db.prepare(countSql).get(...(status ? [status] : []));
 
     res.json({
       orders,
@@ -124,18 +117,18 @@ router.get('/', checkJwt, ensureUser, (req, res) => {
 // Obtener detalle de un pedido
 router.get('/:id', checkJwt, ensureUser, [
   param('id').isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+    const order = await db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
 
     if (!order) {
       return res.status(404).json({ error: 'Pedido no encontrado' });
     }
 
     // Obtener items del pedido con información del producto
-    const items = db.prepare(`
+    const items = await db.prepare(`
       SELECT
         oi.*,
         p.name as product_name,
@@ -164,19 +157,19 @@ router.put('/:id/items/:itemId', checkJwt, ensureUser, [
   param('itemId').isInt(),
   body('status').isIn(['pending', 'sold', 'not_sold', 'replaced']),
   body('replaced_with_product_id').optional().isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id, itemId } = req.params;
     const { status, replaced_with_product_id } = req.body;
 
     // Verificar que el pedido existe
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+    const order = await db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     if (!order) {
       return res.status(404).json({ error: 'Pedido no encontrado' });
     }
 
     // Verificar que el item existe
-    const item = db.prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?').get(itemId, id);
+    const item = await db.prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?').get(itemId, id);
     if (!item) {
       return res.status(404).json({ error: 'Item no encontrado' });
     }
@@ -186,47 +179,43 @@ router.put('/:id/items/:itemId', checkJwt, ensureUser, [
       return res.status(400).json({ error: 'Debe especificar el producto de reemplazo' });
     }
 
-    const transaction = db.transaction(() => {
-      // Actualizar item
-      const updateItem = db.prepare(`
-        UPDATE order_items
-        SET status = ?, replaced_with_product_id = ?
-        WHERE id = ?
-      `);
+    // Actualizar item
+    const updateItem = db.prepare(`
+      UPDATE order_items
+      SET status = ?, replaced_with_product_id = ?
+      WHERE id = ?
+    `);
 
-      updateItem.run(status, replaced_with_product_id || null, itemId);
+    await updateItem.run(status, replaced_with_product_id || null, itemId);
 
-      // Si se vendió o reemplazó, actualizar inventario
-      if (status === 'sold') {
-        // Descontar del inventario original
-        db.prepare(`
+    // Si se vendió o reemplazó, actualizar inventario
+    if (status === 'sold') {
+      // Descontar del inventario original
+      await db.prepare(`
+        UPDATE inventory
+        SET stock = stock - ?
+        WHERE product_id = ? AND user_id = ?
+      `).run(item.quantity, item.product_id, req.user.id);
+    } else if (status === 'replaced' && replaced_with_product_id) {
+      // Descontar del inventario del producto de reemplazo
+      await db.prepare(`
+        UPDATE inventory
+        SET stock = stock - ?
+        WHERE product_id = ? AND user_id = ?
+      `).run(item.quantity, replaced_with_product_id, req.user.id);
+
+      // Reestablecer stock del producto original (si se había descontado)
+      if (item.status === 'sold') {
+        await db.prepare(`
           UPDATE inventory
-          SET stock = stock - ?
+          SET stock = stock + ?
           WHERE product_id = ? AND user_id = ?
         `).run(item.quantity, item.product_id, req.user.id);
-      } else if (status === 'replaced' && replaced_with_product_id) {
-        // Descontar del inventario del producto de reemplazo
-        db.prepare(`
-          UPDATE inventory
-          SET stock = stock - ?
-          WHERE product_id = ? AND user_id = ?
-        `).run(item.quantity, replaced_with_product_id, req.user.id);
-
-        // Reestablecer stock del producto original (si se había descontado)
-        if (item.status === 'sold') {
-          db.prepare(`
-            UPDATE inventory
-            SET stock = stock + ?
-            WHERE product_id = ? AND user_id = ?
-          `).run(item.quantity, item.product_id, req.user.id);
-        }
       }
+    }
 
-      // Actualizar timestamp del pedido
-      db.prepare('UPDATE orders SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
-    });
-
-    transaction();
+    // Actualizar timestamp del pedido
+    await db.prepare('UPDATE orders SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
 
     res.json({ message: 'Item actualizado correctamente' });
   } catch (error) {
@@ -238,11 +227,11 @@ router.put('/:id/items/:itemId', checkJwt, ensureUser, [
 // Marcar pedido como completado
 router.put('/:id/complete', checkJwt, ensureUser, [
   param('id').isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+    const order = await db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
 
     if (!order) {
       return res.status(404).json({ error: 'Pedido no encontrado' });
@@ -254,7 +243,7 @@ router.put('/:id/complete', checkJwt, ensureUser, [
       WHERE id = ?
     `);
 
-    update.run(id);
+    await update.run(id);
 
     res.json({ message: 'Pedido marcado como completado' });
   } catch (error) {
@@ -266,11 +255,11 @@ router.put('/:id/complete', checkJwt, ensureUser, [
 // Cancelar pedido
 router.put('/:id/cancel', checkJwt, ensureUser, [
   param('id').isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+    const order = await db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
 
     if (!order) {
       return res.status(404).json({ error: 'Pedido no encontrado' });
@@ -282,7 +271,7 @@ router.put('/:id/cancel', checkJwt, ensureUser, [
       WHERE id = ?
     `);
 
-    update.run(id);
+    await update.run(id);
 
     res.json({ message: 'Pedido cancelado' });
   } catch (error) {

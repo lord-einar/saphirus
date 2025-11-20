@@ -30,7 +30,7 @@ async function updateBrandLogos() {
   }
 
   // Obtener todas las marcas únicas de productos activos
-  const brands = db.prepare(`
+  const brands = await db.prepare(`
     SELECT DISTINCT brand
     FROM products
     WHERE is_active = 1 AND brand IS NOT NULL AND brand != ''
@@ -45,14 +45,14 @@ async function updateBrandLogos() {
     console.log(`📦 Procesando: ${brandName}`);
 
     // Verificar si ya existe el logo
-    const existingBrand = db.prepare('SELECT logo_url FROM brands WHERE name = ?').get(brandName);
+    const existingBrand = await db.prepare('SELECT logo_url FROM brands WHERE name = ?').get(brandName);
     if (existingBrand?.logo_url && !existingBrand.logo_url.startsWith('http')) {
       console.log(`  ✓ Ya tiene logo local: ${existingBrand.logo_url}\n`);
       continue;
     }
 
     // Obtener un producto de esta marca
-    const product = db.prepare(`
+    const product = await db.prepare(`
       SELECT id, name, product_url
       FROM products
       WHERE brand = ? AND product_url IS NOT NULL AND is_active = 1
@@ -98,7 +98,7 @@ async function updateBrandLogos() {
             logo_url = excluded.logo_url,
             updated_at = CURRENT_TIMESTAMP
         `);
-        upsertStmt.run(details.brandName, localPath);
+        await upsertStmt.run(details.brandName, localPath);
 
         console.log(`  ✅ Logo guardado: ${fileName}\n`);
       } else {
@@ -116,7 +116,7 @@ async function updateBrandLogos() {
   console.log('=== Proceso completado ===\n');
 
   // Mostrar resumen
-  const savedBrands = db.prepare('SELECT * FROM brands ORDER BY name').all();
+  const savedBrands = await db.prepare('SELECT * FROM brands ORDER BY name').all();
   console.log(`Total de marcas con logos: ${savedBrands.length}\n`);
   savedBrands.forEach(b => {
     console.log(`✓ ${b.name}: ${b.logo_url}`);

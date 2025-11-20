@@ -20,42 +20,79 @@ class PostgresWrapper {
 
   // Simular db.prepare().get() de SQLite
   prepare(sql) {
+    const self = this;
     return {
       get: async (...params) => {
-        const client = await this.pool.connect();
+        const client = self.currentClient || await self.pool.connect();
         try {
           // Convertir placeholders de ? a $1, $2, etc.
-          const pgSql = this.convertPlaceholders(sql);
+          const pgSql = self.convertPlaceholders(sql);
           const result = await client.query(pgSql, params);
           return result.rows[0] || null;
         } finally {
-          client.release();
+          if (!self.currentClient) {
+            client.release();
+          }
         }
       },
 
       all: async (...params) => {
-        const client = await this.pool.connect();
+        const client = self.currentClient || await self.pool.connect();
         try {
-          const pgSql = this.convertPlaceholders(sql);
+          const pgSql = self.convertPlaceholders(sql);
           const result = await client.query(pgSql, params);
           return result.rows;
         } finally {
-          client.release();
+          if (!self.currentClient) {
+            client.release();
+          }
         }
       },
 
       run: async (...params) => {
-        const client = await this.pool.connect();
+        const client = self.currentClient || await self.pool.connect();
         try {
-          const pgSql = this.convertPlaceholders(sql);
+          let pgSql = self.convertPlaceholders(sql);
+
+          // Si es un INSERT y no tiene RETURNING, agregarlo para obtener el ID
+          if (pgSql.trim().toUpperCase().startsWith('INSERT') &&
+              !pgSql.toUpperCase().includes('RETURNING')) {
+            pgSql += ' RETURNING id';
+          }
+
           const result = await client.query(pgSql, params);
           return {
             changes: result.rowCount,
             lastInsertRowid: result.rows[0]?.id || null
           };
         } finally {
-          client.release();
+          if (!self.currentClient) {
+            client.release();
+          }
         }
+      }
+    };
+  }
+
+  // Simular transacciones de SQLite
+  transaction(fn) {
+    const self = this;
+    return async (...args) => {
+      const client = await self.pool.connect();
+      try {
+        await client.query('BEGIN');
+        self.currentClient = client;
+
+        await fn(...args);
+
+        await client.query('COMMIT');
+        self.currentClient = null;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        self.currentClient = null;
+        throw error;
+      } finally {
+        client.release();
       }
     };
   }

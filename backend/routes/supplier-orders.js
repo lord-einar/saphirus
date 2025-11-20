@@ -11,7 +11,7 @@ router.use(checkJwt, ensureUser);
 // Listar pedidos al proveedor
 router.get('/', [
   query('status').optional().isString()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { status } = req.query;
     const userId = req.user.id;
@@ -37,7 +37,7 @@ router.get('/', [
 
     sql += ' ORDER BY so.created_at DESC';
 
-    const orders = db.prepare(sql).all(...params);
+    const orders = await db.prepare(sql).all(...params);
 
     res.json(orders);
   } catch (error) {
@@ -57,20 +57,20 @@ router.post('/', [
     const userId = req.user.id;
 
     // Verificar si ya existe un pedido pendiente para este producto
-    const existing = db.prepare(`
+    const existing = await db.prepare(`
       SELECT * FROM supplier_orders
       WHERE product_id = ? AND user_id = ? AND status = 'pending'
     `).get(product_id, userId);
 
     if (existing) {
       // Actualizar cantidad del pedido existente
-      db.prepare(`
+      await db.prepare(`
         UPDATE supplier_orders
         SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(quantity, existing.id);
 
-      const updated = db.prepare('SELECT * FROM supplier_orders WHERE id = ?').get(existing.id);
+      const updated = await db.prepare('SELECT * FROM supplier_orders WHERE id = ?').get(existing.id);
       return res.json(updated);
     }
 
@@ -80,8 +80,8 @@ router.post('/', [
       VALUES (?, ?, ?, ?)
     `);
 
-    const result = insert.run(product_id, userId, quantity, notes || null);
-    const newOrder = db.prepare('SELECT * FROM supplier_orders WHERE id = ?').get(result.lastInsertRowid);
+    const result = await insert.run(product_id, userId, quantity, notes || null);
+    const newOrder = await db.prepare('SELECT * FROM supplier_orders WHERE id = ?').get(result.lastInsertRowid);
 
     res.json(newOrder);
   } catch (error) {
@@ -96,14 +96,14 @@ router.put('/:id', [
   body('quantity').optional().isInt({ min: 1 }),
   body('status').optional().isIn(['pending', 'ordered', 'received', 'cancelled']),
   body('notes').optional().isString()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
     const { quantity, status, notes } = req.body;
     const userId = req.user.id;
 
     // Verificar que el pedido pertenece al usuario
-    const order = db.prepare('SELECT * FROM supplier_orders WHERE id = ? AND user_id = ?').get(id, userId);
+    const order = await db.prepare('SELECT * FROM supplier_orders WHERE id = ? AND user_id = ?').get(id, userId);
 
     if (!order) {
       return res.status(404).json({ error: 'Pedido no encontrado' });
@@ -134,13 +134,13 @@ router.put('/:id', [
     updates.push('updated_at = CURRENT_TIMESTAMP');
     params.push(id, userId);
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE supplier_orders
       SET ${updates.join(', ')}
       WHERE id = ? AND user_id = ?
     `).run(...params);
 
-    const updated = db.prepare('SELECT * FROM supplier_orders WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM supplier_orders WHERE id = ?').get(id);
     res.json(updated);
   } catch (error) {
     console.error('Error al actualizar pedido al proveedor:', error);
@@ -151,12 +151,12 @@ router.put('/:id', [
 // Eliminar pedido al proveedor
 router.delete('/:id', [
   param('id').isInt({ min: 1 })
-], (req, res) => {
+], async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const result = db.prepare('DELETE FROM supplier_orders WHERE id = ? AND user_id = ?').run(id, userId);
+    const result = await db.prepare('DELETE FROM supplier_orders WHERE id = ? AND user_id = ?').run(id, userId);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Pedido no encontrado' });

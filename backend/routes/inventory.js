@@ -9,9 +9,9 @@ const router = express.Router();
 router.use(checkJwt, ensureUser);
 
 // Obtener inventario del vendedor
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const inventory = db.prepare(`
+    const inventory = await db.prepare(`
       SELECT
         i.id,
         i.stock,
@@ -40,19 +40,19 @@ router.get('/', (req, res) => {
 router.post('/:productId', [
   param('productId').isInt(),
   body('stock').isInt({ min: 0 })
-], (req, res) => {
+], async (req, res) => {
   try {
     const { productId } = req.params;
     const { stock = 0 } = req.body;
 
     // Verificar que el producto existe
-    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+    const product = await db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
     if (!product) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
     // Verificar si ya existe en el inventario
-    const existing = db.prepare(`
+    const existing = await db.prepare(`
       SELECT * FROM inventory WHERE product_id = ? AND user_id = ?
     `).get(productId, req.user.id);
 
@@ -66,7 +66,7 @@ router.post('/:productId', [
       VALUES (?, ?, ?)
     `);
 
-    const result = insert.run(productId, req.user.id, stock);
+    const result = await insert.run(productId, req.user.id, stock);
 
     res.status(201).json({
       id: result.lastInsertRowid,
@@ -84,13 +84,13 @@ router.post('/:productId', [
 router.put('/:productId', [
   param('productId').isInt(),
   body('stock').isInt({ min: 0 })
-], (req, res) => {
+], async (req, res) => {
   try {
     const { productId } = req.params;
     const { stock } = req.body;
 
     // Verificar que el producto está en el inventario del usuario
-    const inventoryItem = db.prepare(`
+    const inventoryItem = await db.prepare(`
       SELECT * FROM inventory WHERE product_id = ? AND user_id = ?
     `).get(productId, req.user.id);
 
@@ -103,7 +103,7 @@ router.put('/:productId', [
       UPDATE inventory SET stock = ? WHERE product_id = ? AND user_id = ?
     `);
 
-    update.run(stock, productId, req.user.id);
+    await update.run(stock, productId, req.user.id);
 
     res.json({
       product_id: productId,
@@ -119,7 +119,7 @@ router.put('/:productId', [
 // Eliminar producto del inventario
 router.delete('/:productId', [
   param('productId').isInt()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { productId } = req.params;
 
@@ -127,7 +127,7 @@ router.delete('/:productId', [
       DELETE FROM inventory WHERE product_id = ? AND user_id = ?
     `);
 
-    const result = deleteStmt.run(productId, req.user.id);
+    const result = await deleteStmt.run(productId, req.user.id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Producto no encontrado en tu inventario' });

@@ -29,17 +29,17 @@ router.post('/run', async (req, res) => {
 });
 
 // Obtener historial de scraping
-router.get('/logs', (req, res) => {
+router.get('/logs', async (req, res) => {
   try {
     const { limit = 20, offset = 0 } = req.query;
 
-    const logs = db.prepare(`
+    const logs = await db.prepare(`
       SELECT * FROM scraping_logs
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `).all(parseInt(limit), parseInt(offset));
 
-    const { total } = db.prepare('SELECT COUNT(*) as total FROM scraping_logs').get();
+    const { total } = await db.prepare('SELECT COUNT(*) as total FROM scraping_logs').get();
 
     res.json({
       logs,
@@ -54,9 +54,9 @@ router.get('/logs', (req, res) => {
 });
 
 // Obtener último scraping
-router.get('/latest', (req, res) => {
+router.get('/latest', async (req, res) => {
   try {
-    const latestLog = db.prepare(`
+    const latestLog = await db.prepare(`
       SELECT * FROM scraping_logs
       ORDER BY created_at DESC
       LIMIT 1

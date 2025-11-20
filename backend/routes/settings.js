@@ -27,7 +27,7 @@ router.get('/', (req, res) => {
 // Actualizar email de notificaciones
 router.put('/email', [
   body('notification_email').isEmail()
-], (req, res) => {
+], async (req, res) => {
   try {
     const { notification_email } = req.body;
 
@@ -35,7 +35,7 @@ router.put('/email', [
       UPDATE users SET notification_email = ? WHERE id = ?
     `);
 
-    update.run(notification_email, req.user.id);
+    await update.run(notification_email, req.user.id);
 
     res.json({
       message: 'Email de notificaciones actualizado',

@@ -224,22 +224,22 @@ export async function runScraping() {
     // Iniciar transacción
     const insertStmt = db.prepare(`
       INSERT INTO products (sku, name, brand, category, price, image_url, product_url, description, attributes, labels, is_active, is_new)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, TRUE)
     `);
 
     const updateStmt = db.prepare(`
       UPDATE products
       SET name = ?, brand = ?, category = ?, price = ?, image_url = ?, product_url = ?,
-          description = ?, attributes = ?, labels = ?, is_active = 1, updated_at = CURRENT_TIMESTAMP
+          description = ?, attributes = ?, labels = ?, is_active = TRUE, updated_at = CURRENT_TIMESTAMP
       WHERE sku = ?
     `);
 
     const deactivateStmt = db.prepare(`
-      UPDATE products SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE sku = ?
+      UPDATE products SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE sku = ?
     `);
 
     const resetNewFlagStmt = db.prepare(`
-      UPDATE products SET is_new = 0 WHERE is_new = 1
+      UPDATE products SET is_new = FALSE WHERE is_new = TRUE
     `);
 
     // Resetear flag de "nuevo" de productos anteriores

@@ -77,12 +77,21 @@ router.get('/', [
 // Obtener marcas únicas con logos
 router.get('/brands', async (req, res) => {
   try {
+    console.log('📦 Obteniendo marcas...');
     const brands = await db.prepare(`
       SELECT DISTINCT p.brand
       FROM products p
       WHERE p.is_active = 1 AND p.brand IS NOT NULL AND p.brand != ''
       ORDER BY p.brand ASC
     `).all();
+
+    console.log(`✓ Encontradas ${brands.length} marcas`);
+
+    // Si no hay productos, devolver array vacío
+    if (brands.length === 0) {
+      console.log('⚠️  No hay productos en la base de datos');
+      return res.json([]);
+    }
 
     // Obtener logos de la tabla brands
     const brandsWithLogos = await Promise.all(brands.map(async b => {
@@ -93,10 +102,16 @@ router.get('/brands', async (req, res) => {
       };
     }));
 
+    console.log(`✓ Marcas con logos procesadas: ${brandsWithLogos.length}`);
     res.json(brandsWithLogos);
   } catch (error) {
-    console.error('Error al obtener marcas:', error);
-    res.status(500).json({ error: 'Error al obtener marcas' });
+    console.error('❌ Error al obtener marcas:', error);
+    console.error('Stack:', error.stack);
+    res.status(500).json({
+      error: 'Error al obtener marcas',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

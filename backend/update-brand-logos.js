@@ -33,7 +33,7 @@ async function updateBrandLogos() {
   const brands = await db.prepare(`
     SELECT DISTINCT brand
     FROM products
-    WHERE is_active = 1 AND brand IS NOT NULL AND brand != ''
+    WHERE is_active = TRUE AND brand IS NOT NULL AND brand != ''
     ORDER BY brand
   `).all();
 
@@ -55,7 +55,7 @@ async function updateBrandLogos() {
     const product = await db.prepare(`
       SELECT id, name, product_url
       FROM products
-      WHERE brand = ? AND product_url IS NOT NULL AND is_active = 1
+      WHERE brand = ? AND product_url IS NOT NULL AND is_active = TRUE
       LIMIT 1
     `).get(brandName);
 

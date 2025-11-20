@@ -217,7 +217,7 @@ export async function runScraping() {
     console.log(`\n✓ Total de productos encontrados: ${allProducts.length}`);
 
     // Obtener todos los SKUs actuales en la BD
-    const existingProducts = await db.prepare('SELECT sku, id FROM products WHERE is_active = 1').all();
+    const existingProducts = await db.prepare('SELECT sku, id FROM products WHERE is_active = TRUE').all();
     const existingSkus = new Set(existingProducts.map(p => p.sku));
     const scrapedSkus = new Set(allProducts.map(p => p.sku));
 

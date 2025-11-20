@@ -16,7 +16,7 @@ router.get('/', [
   try {
     const { brand, category, search, limit = 10000, offset = 0 } = req.query;
 
-    let sql = 'SELECT * FROM products WHERE is_active = 1';
+    let sql = 'SELECT * FROM products WHERE is_active = TRUE';
     const params = [];
 
     if (brand) {
@@ -41,7 +41,7 @@ router.get('/', [
     const products = await db.prepare(sql).all(...params);
 
     // Obtener total de productos para paginación
-    let countSql = 'SELECT COUNT(*) as total FROM products WHERE is_active = 1';
+    let countSql = 'SELECT COUNT(*) as total FROM products WHERE is_active = TRUE';
     const countParams = [];
 
     if (brand) {
@@ -81,7 +81,7 @@ router.get('/brands', async (req, res) => {
     const brands = await db.prepare(`
       SELECT DISTINCT p.brand
       FROM products p
-      WHERE p.is_active = 1 AND p.brand IS NOT NULL AND p.brand != ''
+      WHERE p.is_active = TRUE AND p.brand IS NOT NULL AND p.brand != ''
       ORDER BY p.brand ASC
     `).all();
 
@@ -125,7 +125,7 @@ router.get('/categories', [
     let sql = `
       SELECT DISTINCT category
       FROM products
-      WHERE is_active = 1 AND category IS NOT NULL AND category != '' AND category != 'Sin categoría'
+      WHERE is_active = TRUE AND category IS NOT NULL AND category != '' AND category != 'Sin categoría'
     `;
     const params = [];
 
@@ -150,7 +150,7 @@ router.get('/new', async (req, res) => {
   try {
     const products = await db.prepare(`
       SELECT * FROM products
-      WHERE is_active = 1 AND is_new = 1
+      WHERE is_active = TRUE AND is_new = TRUE
       ORDER BY created_at DESC
     `).all();
 
@@ -166,7 +166,7 @@ router.get('/removed', async (req, res) => {
   try {
     const products = await db.prepare(`
       SELECT * FROM products
-      WHERE is_active = 0
+      WHERE is_active = FALSE
       ORDER BY updated_at DESC
       LIMIT 100
     `).all();

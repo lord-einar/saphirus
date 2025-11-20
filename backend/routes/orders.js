@@ -22,7 +22,7 @@ router.post('/', [
     // Validar que todos los productos existen y obtener sus precios
     const validatedItems = [];
     for (const item of items) {
-      const product = await db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1').get(item.product_id);
+      const product = await db.prepare('SELECT * FROM products WHERE id = ? AND is_active = TRUE').get(item.product_id);
       if (!product) {
         return res.status(400).json({ error: `Producto con ID ${item.product_id} no encontrado` });
       }
